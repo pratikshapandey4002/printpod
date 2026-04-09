@@ -1,0 +1,20 @@
+{
+  "name": "printpod-pi-agent",
+  "version": "1.0.0",
+  "description": "PrintPod Raspberry Pi agent - handles WebSocket connection, file download, and CUPS printing",
+  "main": "src/index.js",
+  "scripts": {
+    "start": "node src/index.js",
+    "dev": "nodemon src/index.js"
+  },
+  "dependencies": {
+    "ws": "^8.17.0",
+    "axios": "^1.7.2",
+    "dotenv": "^16.4.5",
+    "winston": "^3.13.0",
+    "node-cron": "^3.0.3"
+  },
+  "devDependencies": {
+    "nodemon": "^3.1.3"
+  }
+}

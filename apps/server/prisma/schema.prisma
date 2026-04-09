@@ -1,0 +1,71 @@
+// PrintPod — Prisma Schema
+// Database: Neon PostgreSQL
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Job {
+  id            String    @id @default(uuid())
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  phoneNumber   String
+  userEmail     String?
+
+  originalName  String
+  fileKey       String
+  fileExtension String
+  pageCount     Int       @default(1)
+
+  copies        Int       @default(1)
+  color         String    @default("mono")
+  sides         String    @default("one-sided")
+  paperSize     String    @default("A4")
+  quality       String    @default("normal")
+  orientation   String    @default("portrait")
+
+  pricePerPage  Float
+  totalAmount   Float
+
+  paymentStatus    String  @default("pending")
+  razorpayOrderId  String? @unique
+  razorpayPaymentId String? @unique
+
+  otpHash      String?
+  otpExpiresAt DateTime?
+  otpUsed      Boolean   @default(false)
+
+  status       String    @default("created")
+  kioskId      String?
+  cupsJobId    String?
+  errorMessage String?
+  fileDeleted  Boolean   @default(false)
+
+  @@index([phoneNumber])
+  @@index([status])
+  @@index([razorpayOrderId])
+}
+
+model Kiosk {
+  id            String    @id
+  location      String
+  createdAt     DateTime  @default(now())
+  isOnline      Boolean   @default(false)
+  lastSeenAt    DateTime?
+  printerReady  Boolean   @default(false)
+  printerStatus String    @default("unknown")
+  pendingJobs   Int       @default(0)
+}
+
+model Admin {
+  id        String   @id @default(uuid())
+  email     String   @unique
+  password  String
+  createdAt DateTime @default(now())
+}
