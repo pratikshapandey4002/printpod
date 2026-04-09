@@ -11,7 +11,16 @@ const app = express();
 const server = http.createServer(app);
 
 app.use(helmet());
-app.use(cors({ origin: '*', methods: ['GET', 'POST', 'PUT', 'DELETE'] }));
+app.use(cors({
+  origin: [
+    'https://printpod-two.vercel.app',
+    'https://printpod-mnrf.vercel.app',
+    'http://localhost:5173',
+    'http://localhost:5174',
+  ],
+  methods: ['GET', 'POST', 'PUT', 'DELETE'],
+  allowedHeaders: ['Content-Type', 'Authorization'],
+}));
 app.use(rateLimit({ windowMs: 15 * 60 * 1000, max: 100 }));
 
 app.use('/payment/webhook', express.raw({ type: 'application/json' }));
