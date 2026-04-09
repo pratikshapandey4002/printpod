@@ -22,36 +22,10 @@ export default function Payment() {
     setLoading(true)
     setError('')
     try {
-      const { data } = await axios.post(`${API}/payment/create-order`, { jobId })
+      const { data } = await axios.post(`${API}/payment/create-checkout`, { jobId })
       if (!data.success) throw new Error(data.error)
-
-      const options = {
-        key: data.razorpayKeyId,
-        amount: data.order.amount,
-        currency: 'INR',
-        name: 'PrintPod',
-        description: 'Document Printing',
-        order_id: data.order.id,
-        prefill: { contact: phone },
-        theme: { color: '#2563eb' },
-        handler: async (response) => {
-          try {
-            await axios.post(`${API}/payment/verify`, {
-              razorpay_order_id: response.razorpay_order_id,
-              razorpay_payment_id: response.razorpay_payment_id,
-              razorpay_signature: response.razorpay_signature,
-              jobId,
-            })
-            navigate('/success', { state: { jobId, phone } })
-          } catch {
-            setError('Payment verified but OTP failed. Call support.')
-          }
-        },
-        modal: { ondismiss: () => setLoading(false) }
-      }
-
-      const rzp = new window.Razorpay(options)
-      rzp.open()
+      // Redirect to Dodo hosted checkout page
+      window.location.href = data.checkoutUrl
     } catch (err) {
       setError(err.response?.data?.error || err.message || 'Payment failed')
       setLoading(false)
@@ -88,7 +62,7 @@ export default function Payment() {
       <div className="card" style={{ fontSize:13, color:'#6b7280' }}>
         <div style={{ display:'flex', gap:8, marginBottom:8 }}>
           <span>🔒</span>
-          <span>Secured by Razorpay. Supports UPI, cards, netbanking.</span>
+          <span>Secured by Dodo Payments. Supports UPI, cards, netbanking.</span>
         </div>
         <div style={{ display:'flex', gap:8 }}>
           <span>📱</span>
@@ -98,7 +72,7 @@ export default function Payment() {
 
       <button className="btn btn-success" onClick={handlePay} disabled={loading}>
         {loading && <span className="spinner" />}
-        {loading ? 'Opening payment...' : `Pay ₹${totalAmount}`}
+        {loading ? 'Redirecting to checkout...' : `Pay ₹${totalAmount} via Dodo`}
       </button>
     </div>
   )

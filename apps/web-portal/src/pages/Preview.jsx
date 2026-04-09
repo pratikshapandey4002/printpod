@@ -11,8 +11,8 @@ export default function Preview() {
 
   if (!state?.job) return null
 
-  const { job, fileName } = state
-  const { jobId, pageCount, printOptions, pricing, otp } = job
+  const { job, fileName, phone } = state
+  const { jobId, pageCount, printOptions, pricing } = job
 
   const label = {
     color: { mono: 'Black & White', color: 'Color' },
@@ -40,6 +40,7 @@ export default function Preview() {
         <div className="step-dot done" />
         <div className="step-dot active" />
         <div className="step-dot" />
+        <div className="step-dot" />
       </div>
 
       <div className="card">
@@ -60,10 +61,10 @@ export default function Preview() {
       </div>
 
       <button className="btn btn-primary" style={{ marginBottom:12 }}
-        onClick={() => navigate('/success', {
-          state: { jobId, otp, totalAmount: pricing.totalAmount, fileName }
+        onClick={() => navigate('/payment', {
+          state: { jobId, totalAmount: pricing.totalAmount, phone, fileName }
         })}>
-        Confirm & Get OTP →
+        Proceed to Pay ₹{pricing.totalAmount} →
       </button>
 
       <button className="btn btn-outline" onClick={() => navigate('/')}>
