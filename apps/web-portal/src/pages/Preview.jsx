@@ -12,7 +12,7 @@ export default function Preview() {
   if (!state?.job) return null
 
   const { job, fileName, phone } = state
-  const { jobId, pageCount, printOptions, pricing } = job
+  const { jobId, pageCount, printOptions, pricing, otp } = job
 
   const label = {
     color: { mono: 'Black & White', color: 'Color' },
@@ -60,11 +60,20 @@ export default function Preview() {
         <div className="breakdown">₹{pricing.pricePerPage}/page × {pageCount * printOptions.copies} pages</div>
       </div>
 
+      {/* Demo mode — get OTP instantly */}
       <button className="btn btn-primary" style={{ marginBottom:12 }}
+        onClick={() => navigate('/success', {
+          state: { jobId, otp, totalAmount: pricing.totalAmount, fileName }
+        })}>
+        Get OTP instantly (Demo) →
+      </button>
+
+      {/* Dodo Pay — real payment */}
+      <button className="btn btn-success" style={{ marginBottom:12 }}
         onClick={() => navigate('/payment', {
           state: { jobId, totalAmount: pricing.totalAmount, phone, fileName }
         })}>
-        Proceed to Pay ₹{pricing.totalAmount} →
+        💳 Pay ₹{pricing.totalAmount} via Dodo
       </button>
 
       <button className="btn btn-outline" onClick={() => navigate('/')}>
