@@ -4,7 +4,6 @@ const { v4: uuidv4 } = require('uuid');
 const { PrismaClient } = require('@prisma/client');
 const { getMulterS3Storage } = require('../services/storage');
 const { calculatePrice, getPriceList } = require('../services/pricing');
-const { generateOTP, hashOTP, getOTPExpiry } = require('../services/otp');
 const logger = require('../logger');
 
 const router = express.Router();
@@ -44,11 +43,6 @@ router.post('/upload', (req, res) => {
       const printOptions = { copies: parseInt(copies), color, sides, paperSize, quality, orientation };
       const { pricePerPage, totalAmount } = calculatePrice({ pageCount, ...printOptions });
 
-      // Always generate OTP so demo mode works
-      const otp = generateOTP();
-      const otpHash = await hashOTP(otp);
-      const otpExpiresAt = getOTPExpiry();
-
       const job = await prisma.job.create({
         data: {
           id: req.jobId,
@@ -60,14 +54,12 @@ router.post('/upload', (req, res) => {
           ...printOptions,
           pricePerPage,
           totalAmount,
-          status: 'paid',
-          paymentStatus: 'paid',
-          otpHash,
-          otpExpiresAt,
+          status: 'created',
+          paymentStatus: 'pending',
         },
       });
 
-      logger.info(`Job created: ${job.id} | OTP: ${otp} | ₹${totalAmount}`);
+      logger.info(`Job created: ${job.id} | ₹${totalAmount}`);
 
       return res.json({
         success: true,
@@ -75,7 +67,6 @@ router.post('/upload', (req, res) => {
         pageCount,
         printOptions,
         pricing: { pricePerPage, totalAmount, currency: 'INR' },
-        otp, // shown on screen for demo
       });
     } catch (dbErr) {
       logger.error(`Job creation failed: ${dbErr.message}`);

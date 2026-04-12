@@ -3,7 +3,7 @@ const path = require('path');
 const fs = require('fs');
 const logger = require('./logger');
 
-const PRINTER_NAME = 'Brother-Printer';
+const PRINTER_NAME = 'Brother_DCP_L2680DW';
 
 /**
  * Build the lp options string from job settings
