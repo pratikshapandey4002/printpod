@@ -10,6 +10,9 @@ const { initPiSocket } = require('./websocket/piSocket');
 const app = express();
 const server = http.createServer(app);
 
+// Trust Render's proxy
+app.set('trust proxy', 1);
+
 app.use(helmet());
 app.use(cors({
   origin: [
@@ -21,7 +24,8 @@ app.use(cors({
   methods: ['GET', 'POST', 'PUT', 'DELETE'],
   allowedHeaders: ['Content-Type', 'Authorization'],
 }));
-app.use(rateLimit({ windowMs: 15 * 60 * 1000, max: 100 }));
+
+app.use(rateLimit({ windowMs: 15 * 60 * 1000, max: 100, trustProxy: true }));
 
 app.use('/payment/webhook', express.raw({ type: 'application/json' }));
 app.use('/payment/dodo-webhook', express.raw({ type: 'application/json' }));
