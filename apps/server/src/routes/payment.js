@@ -89,9 +89,9 @@ router.post('/dodo-webhook', express.raw({ type: 'application/json' }), async (r
     });
 
     const event = JSON.parse(req.body.toString());
-    logger.info(`Dodo webhook: ${event.event_type}`);
+    logger.info(`Dodo webhook full: ${JSON.stringify(event).slice(0,200)}`);
 
-    if (event.event_type === 'payment.succeeded') {
+    if (event.event_type === 'payment.succeeded' || event.type === 'payment.succeeded') {
       const jobId = event.data?.metadata?.jobId;
       if (!jobId) { logger.warn('No jobId in webhook metadata'); return res.json({ received: true }); }
 
