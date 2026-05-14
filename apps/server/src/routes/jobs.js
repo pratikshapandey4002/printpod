@@ -4,6 +4,7 @@ const { v4: uuidv4 } = require('uuid');
 const { PrismaClient } = require('@prisma/client');
 const { getMulterS3Storage } = require('../services/storage');
 const { calculatePrice, getPriceList } = require('../services/pricing');
+const { generateOTP, hashOTP, getOTPExpiry } = require('../services/otp');
 const logger = require('../logger');
 
 const router = express.Router();
@@ -60,7 +61,6 @@ router.post('/upload', (req, res) => {
       });
 
       logger.info(`Job created: ${job.id} | ₹${totalAmount}`);
-
       return res.json({
         success: true,
         jobId: job.id,
@@ -73,6 +73,31 @@ router.post('/upload', (req, res) => {
       return res.status(500).json({ success: false, error: 'Failed to create job' });
     }
   });
+});
+
+router.get('/:id/otp', async (req, res) => {
+  try {
+    const job = await prisma.job.findUnique({
+      where: { id: req.params.id },
+      select: { id: true, paymentStatus: true, otpExpiresAt: true, otpUsed: true },
+    });
+    if (!job) return res.status(404).json({ success: false, error: 'Job not found' });
+    if (job.paymentStatus !== 'paid') return res.status(400).json({ success: false, error: 'Payment not confirmed yet' });
+
+    // Generate fresh OTP each time this is called (replaces old one)
+    const otp = generateOTP();
+    const otpHash = await hashOTP(otp);
+    await prisma.job.update({
+      where: { id: req.params.id },
+      data: { otpHash, otpExpiresAt: getOTPExpiry(), otpUsed: false },
+    });
+
+    logger.info(`OTP fetched for job ${req.params.id}: ${otp}`);
+    return res.json({ success: true, otp });
+  } catch (err) {
+    logger.error(`OTP fetch error: ${err.message}`);
+    return res.status(500).json({ success: false, error: 'Failed to fetch OTP' });
+  }
 });
 
 router.get('/:id', async (req, res) => {
@@ -91,29 +116,3 @@ router.get('/:id', async (req, res) => {
 });
 
 module.exports = router;
-
-// Get OTP for paid job (called after Dodo redirect)
-router.get('/:id/otp', async (req, res) => {
-  try {
-    const job = await prisma.job.findUnique({
-      where: { id: req.params.id },
-      select: { id: true, paymentStatus: true, otpHash: true, otpExpiresAt: true, otpUsed: true, phoneNumber: true },
-    });
-    if (!job) return res.status(404).json({ success: false, error: 'Job not found' });
-    if (job.paymentStatus !== 'paid') return res.status(400).json({ success: false, error: 'Payment not confirmed yet' });
-    if (job.otpUsed) return res.status(400).json({ success: false, error: 'OTP already used' });
-    
-    // Generate a new OTP and update — since we can't reverse the hash
-    const { generateOTP, hashOTP, getOTPExpiry } = require('../services/otp');
-    const otp = generateOTP();
-    const otpHash = await hashOTP(otp);
-    await prisma.job.update({
-      where: { id: req.params.id },
-      data: { otpHash, otpExpiresAt: getOTPExpiry() },
-    });
-    
-    res.json({ success: true, otp });
-  } catch (err) {
-    res.status(500).json({ success: false, error: 'Failed to fetch OTP' });
-  }
-});
