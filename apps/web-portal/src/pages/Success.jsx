@@ -9,59 +9,49 @@ export default function Success() {
   const navigate = useNavigate()
   const [searchParams] = useSearchParams()
   const [copied, setCopied] = useState(false)
-  const [status, setStatus] = useState('checking')
   const [otp, setOtp] = useState(state?.otp || null)
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState('')
 
-  // jobId can come from state (demo flow) or URL param (Dodo redirect)
   const jobId = state?.jobId || searchParams.get('jobId')
   const totalAmount = state?.totalAmount
   const fileName = state?.fileName
 
   useEffect(() => {
     if (!jobId) { navigate('/'); return }
-
-    // If OTP already in state (demo mode) — no need to poll
-    if (state?.otp) { setStatus('ready'); return }
-
-    // Poll for payment confirmation after Dodo redirect
-    const poll = async () => {
-      try {
-        const { data } = await axios.get(`${API}/payment/status/${jobId}`)
-        if (data.paymentStatus === 'paid') {
-          setStatus('paid')
-        } else {
-          setTimeout(poll, 2000)
+    // If coming from Dodo redirect (no otp in state), fetch it
+    if (!state?.otp) {
+      setLoading(true)
+      const fetchOtp = async () => {
+        try {
+          const { data } = await axios.get(`${API}/jobs/${jobId}/otp`)
+          if (data.success) setOtp(data.otp)
+          else setError(data.error)
+        } catch (err) {
+          setError('Could not load OTP. Try again.')
+        } finally {
+          setLoading(false)
         }
-      } catch {
-        setTimeout(poll, 3000)
       }
+      // Poll until payment is confirmed
+      const tryFetch = async () => {
+        try {
+          const { data } = await axios.get(`${API}/jobs/${jobId}/otp`)
+          if (data.success) { setOtp(data.otp); setLoading(false) }
+          else setTimeout(tryFetch, 2000)
+        } catch { setTimeout(tryFetch, 2000) }
+      }
+      tryFetch()
     }
-    poll()
   }, [jobId, navigate, state])
 
   if (!jobId) return null
 
   const copyOTP = () => {
-    if (!otp) return
     navigator.clipboard.writeText(otp)
     setCopied(true)
     setTimeout(() => setCopied(false), 2000)
   }
-
-  // Still waiting for payment confirmation
-  if (status === 'checking') return (
-    <div className="container">
-      <div className="logo"><h1>🖨 PrintPod</h1></div>
-      <div className="card" style={{ textAlign:'center', padding:40 }}>
-        <div style={{ fontSize:48, marginBottom:16 }}>⏳</div>
-        <div style={{ fontWeight:700, fontSize:20, marginBottom:8 }}>Confirming payment...</div>
-        <div style={{ color:'#6b7280', fontSize:14 }}>Please wait a moment</div>
-        <div className="progress-bar" style={{ margin:'20px auto 0' }}>
-          <div className="progress-fill" />
-        </div>
-      </div>
-    </div>
-  )
 
   return (
     <div className="container">
@@ -79,51 +69,50 @@ export default function Success() {
 
       <div className="card" style={{ textAlign:'center' }}>
         <div style={{ fontSize:48, marginBottom:12 }}>✅</div>
-        <div style={{ fontWeight:700, fontSize:20, marginBottom:6 }}>
-          {status === 'paid' ? 'Payment Successful!' : 'Upload Successful!'}
-        </div>
+        <div style={{ fontWeight:700, fontSize:20, marginBottom:6 }}>Payment Successful!</div>
         {fileName && <div style={{ color:'#6b7280', fontSize:14 }}>{fileName}</div>}
         {totalAmount && <div style={{ color:'#6b7280', fontSize:14 }}>₹{totalAmount}</div>}
       </div>
 
-      {otp ? (
-        <div className="card" style={{ textAlign:'center' }}>
-          <div style={{ fontSize:14, color:'#6b7280', marginBottom:8, fontWeight:500 }}>
-            YOUR PRINT OTP
-          </div>
-          <div style={{
-            fontSize:52, fontWeight:800, letterSpacing:12,
-            color:'#2563eb', fontFamily:'monospace', margin:'12px 0',
-          }}>
-            {otp}
-          </div>
-          <button onClick={copyOTP} style={{
-            background: copied ? '#16a34a' : '#eff6ff',
-            color: copied ? 'white' : '#2563eb',
-            border:'none', borderRadius:8, padding:'8px 20px',
-            fontSize:14, fontWeight:600, cursor:'pointer',
-          }}>
-            {copied ? '✓ Copied!' : 'Copy OTP'}
-          </button>
-          <div style={{ fontSize:12, color:'#9ca3af', marginTop:12 }}>
-            Expires in 15 minutes
-          </div>
+      <div className="card" style={{ textAlign:'center' }}>
+        <div style={{ fontSize:14, color:'#6b7280', marginBottom:8, fontWeight:500 }}>
+          YOUR PRINT OTP
         </div>
-      ) : (
-        <div className="card" style={{ textAlign:'center' }}>
-          <div style={{ fontSize:32, marginBottom:12 }}>📱</div>
-          <div style={{ fontWeight:600, marginBottom:8 }}>OTP sent to your phone!</div>
-          <div style={{ fontSize:14, color:'#6b7280' }}>
-            Check your SMS for the 6-digit OTP
+        {loading ? (
+          <div style={{ padding:'20px 0' }}>
+            <div className="spinner" style={{ borderColor:'rgba(37,99,235,0.3)', borderTopColor:'#2563eb', width:32, height:32, margin:'0 auto' }} />
+            <div style={{ color:'#6b7280', fontSize:14, marginTop:12 }}>Confirming payment...</div>
           </div>
-        </div>
-      )}
+        ) : error ? (
+          <div className="error">{error}</div>
+        ) : otp ? (
+          <>
+            <div style={{
+              fontSize:52, fontWeight:800, letterSpacing:12,
+              color:'#2563eb', fontFamily:'monospace', margin:'12px 0',
+            }}>
+              {otp}
+            </div>
+            <button onClick={copyOTP} style={{
+              background: copied ? '#16a34a' : '#eff6ff',
+              color: copied ? 'white' : '#2563eb',
+              border:'none', borderRadius:8, padding:'8px 20px',
+              fontSize:14, fontWeight:600, cursor:'pointer',
+            }}>
+              {copied ? '✓ Copied!' : 'Copy OTP'}
+            </button>
+            <div style={{ fontSize:12, color:'#9ca3af', marginTop:12 }}>
+              Expires in 15 minutes
+            </div>
+          </>
+        ) : null}
+      </div>
 
       <div className="card">
         <div style={{ fontWeight:600, marginBottom:14 }}>Next steps</div>
         {[
           ['1️⃣', 'Go to the PrintPod kiosk'],
-          ['2️⃣', 'Enter the 6-digit OTP'],
+          ['2️⃣', 'Enter the 6-digit OTP above'],
           ['3️⃣', 'Your document prints instantly'],
           ['4️⃣', 'Collect from the tray'],
         ].map(([icon, text]) => (

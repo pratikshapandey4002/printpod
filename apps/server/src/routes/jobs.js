@@ -91,3 +91,29 @@ router.get('/:id', async (req, res) => {
 });
 
 module.exports = router;
+
+// Get OTP for paid job (called after Dodo redirect)
+router.get('/:id/otp', async (req, res) => {
+  try {
+    const job = await prisma.job.findUnique({
+      where: { id: req.params.id },
+      select: { id: true, paymentStatus: true, otpHash: true, otpExpiresAt: true, otpUsed: true, phoneNumber: true },
+    });
+    if (!job) return res.status(404).json({ success: false, error: 'Job not found' });
+    if (job.paymentStatus !== 'paid') return res.status(400).json({ success: false, error: 'Payment not confirmed yet' });
+    if (job.otpUsed) return res.status(400).json({ success: false, error: 'OTP already used' });
+    
+    // Generate a new OTP and update — since we can't reverse the hash
+    const { generateOTP, hashOTP, getOTPExpiry } = require('../services/otp');
+    const otp = generateOTP();
+    const otpHash = await hashOTP(otp);
+    await prisma.job.update({
+      where: { id: req.params.id },
+      data: { otpHash, otpExpiresAt: getOTPExpiry() },
+    });
+    
+    res.json({ success: true, otp });
+  } catch (err) {
+    res.status(500).json({ success: false, error: 'Failed to fetch OTP' });
+  }
+});
