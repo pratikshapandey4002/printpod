@@ -1,6 +1,3 @@
-// PrintPod — Prisma Schema
-// Database: Neon PostgreSQL
-
 generator client {
   provider = "prisma-client-js"
 }
@@ -38,6 +35,7 @@ model Job {
   razorpayPaymentId String? @unique
 
   otpHash      String?
+  otpPlain     String?
   otpExpiresAt DateTime?
   otpUsed      Boolean   @default(false)
 

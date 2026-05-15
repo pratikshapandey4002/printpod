@@ -4,7 +4,6 @@ const { v4: uuidv4 } = require('uuid');
 const { PrismaClient } = require('@prisma/client');
 const { getMulterS3Storage } = require('../services/storage');
 const { calculatePrice, getPriceList } = require('../services/pricing');
-const { generateOTP, hashOTP, getOTPExpiry } = require('../services/otp');
 const logger = require('../logger');
 
 const router = express.Router();
@@ -75,43 +74,19 @@ router.post('/upload', (req, res) => {
   });
 });
 
-// Store OTPs in memory to avoid regenerating
-const otpCache = new Map();
-
 router.get('/:id/otp', async (req, res) => {
   try {
     const job = await prisma.job.findUnique({
       where: { id: req.params.id },
-      select: { id: true, paymentStatus: true, otpExpiresAt: true, otpUsed: true },
+      select: { id: true, paymentStatus: true, otpPlain: true, otpExpiresAt: true, otpUsed: true },
     });
     if (!job) return res.status(404).json({ success: false, error: 'Job not found' });
     if (job.paymentStatus !== 'paid') return res.status(400).json({ success: false, error: 'Payment not confirmed yet' });
     if (job.otpUsed) return res.status(400).json({ success: false, error: 'OTP already used' });
+    if (!job.otpPlain) return res.status(400).json({ success: false, error: 'OTP not ready yet' });
 
-    // Return cached OTP if exists and not expired
-    if (otpCache.has(req.params.id)) {
-      const cached = otpCache.get(req.params.id)
-      if (cached.expiresAt > Date.now()) {
-        logger.info(`OTP served from cache for job ${req.params.id}: ${cached.otp}`)
-        return res.json({ success: true, otp: cached.otp })
-      }
-    }
-
-    // Generate new OTP only once
-    const otp = generateOTP();
-    const otpHash = await hashOTP(otp);
-    const otpExpiresAt = getOTPExpiry();
-
-    await prisma.job.update({
-      where: { id: req.params.id },
-      data: { otpHash, otpExpiresAt, otpUsed: false },
-    });
-
-    // Cache it
-    otpCache.set(req.params.id, { otp, expiresAt: otpExpiresAt.getTime() })
-
-    logger.info(`OTP generated for job ${req.params.id}: ${otp}`);
-    return res.json({ success: true, otp });
+    logger.info(`OTP served for job ${req.params.id}: ${job.otpPlain}`);
+    return res.json({ success: true, otp: job.otpPlain });
   } catch (err) {
     logger.error(`OTP fetch error: ${err.message}`);
     return res.status(500).json({ success: false, error: 'Failed to fetch OTP' });

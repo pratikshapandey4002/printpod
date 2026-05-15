@@ -8,6 +8,8 @@ const logger = require('../logger');
 const router = express.Router();
 const prisma = new PrismaClient();
 
+const WEB_PORTAL_URL = 'https://printpod-two.vercel.app';
+
 const dodo = new DodoPayments({
   bearerToken: process.env.DODO_API_KEY,
   environment: process.env.DODO_ENVIRONMENT || 'test_mode',
@@ -22,49 +24,30 @@ router.post('/create-checkout', async (req, res) => {
     if (!job) return res.status(404).json({ success: false, error: 'Job not found' });
     if (job.paymentStatus === 'paid') return res.status(400).json({ success: false, error: 'Already paid' });
 
+    const returnUrl = `${WEB_PORTAL_URL}/success?jobId=${jobId}`;
+    logger.info(`Return URL: ${returnUrl}`);
+
     const payment = await dodo.payments.create({
       payment_link: true,
-      billing: {
-        city: 'Mumbai',
-        country: 'IN',
-        state: 'Maharashtra',
-        street: 'NA',
-        zipcode: 400001,
-      },
-      customer: {
-        email: `${job.phoneNumber}@printpod.app`,
-        name: 'PrintPod User',
-      },
-      product_cart: [{
-        product_id: process.env.DODO_PRODUCT_ID,
-        quantity: 1,
-      }],
+      billing: { city: 'Mumbai', country: 'IN', state: 'Maharashtra', street: 'NA', zipcode: 400001 },
+      customer: { email: `${job.phoneNumber}@printpod.app`, name: 'PrintPod User' },
+      product_cart: [{ product_id: process.env.DODO_PRODUCT_ID, quantity: 1 }],
       metadata: { jobId },
-      return_url: `${process.env.WEB_PORTAL_URL}/success?jobId=${jobId}`,
+      return_url: returnUrl,
     });
 
-    logger.info(`Dodo payment created: ${JSON.stringify(payment)}`);
-
-    // Save payment ID to job
     await prisma.job.update({
       where: { id: jobId },
       data: { razorpayOrderId: payment.payment_id, status: 'awaiting_payment' },
     });
 
     const checkoutUrl = payment.payment_link;
-
     if (!checkoutUrl) {
-      logger.error(`No payment_link in Dodo response: ${JSON.stringify(payment)}`);
-      return res.status(500).json({ success: false, error: 'No checkout URL returned from Dodo' });
+      return res.status(500).json({ success: false, error: 'No checkout URL from Dodo' });
     }
 
     logger.info(`Dodo checkout URL: ${checkoutUrl} for job ${jobId}`);
-
-    return res.json({
-      success: true,
-      checkoutUrl,
-      paymentId: payment.payment_id,
-    });
+    return res.json({ success: true, checkoutUrl, paymentId: payment.payment_id });
   } catch (err) {
     logger.error(`Dodo checkout creation failed: ${err.message}`);
     return res.status(500).json({ success: false, error: 'Payment session creation failed' });
@@ -89,11 +72,11 @@ router.post('/dodo-webhook', express.raw({ type: 'application/json' }), async (r
     });
 
     const event = JSON.parse(req.body.toString());
-    logger.info(`Dodo webhook full: ${JSON.stringify(event).slice(0,200)}`);
+    logger.info(`Dodo webhook: ${event.event_type || event.type}`);
 
     if (event.event_type === 'payment.succeeded' || event.type === 'payment.succeeded') {
       const jobId = event.data?.metadata?.jobId;
-      if (!jobId) { logger.warn('No jobId in webhook metadata'); return res.json({ received: true }); }
+      if (!jobId) { logger.warn('No jobId in webhook'); return res.json({ received: true }); }
 
       const job = await prisma.job.findUnique({ where: { id: jobId } });
       if (!job) { logger.warn(`Job not found: ${jobId}`); return res.json({ received: true }); }
@@ -109,6 +92,7 @@ router.post('/dodo-webhook', express.raw({ type: 'application/json' }), async (r
           razorpayPaymentId: event.data?.payment_id || 'dodo',
           status: 'paid',
           otpHash,
+          otpPlain: otp,
           otpExpiresAt: getOTPExpiry(),
         },
       });
