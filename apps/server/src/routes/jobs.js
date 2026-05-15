@@ -75,6 +75,9 @@ router.post('/upload', (req, res) => {
   });
 });
 
+// Store OTPs in memory to avoid regenerating
+const otpCache = new Map();
+
 router.get('/:id/otp', async (req, res) => {
   try {
     const job = await prisma.job.findUnique({
@@ -83,16 +86,31 @@ router.get('/:id/otp', async (req, res) => {
     });
     if (!job) return res.status(404).json({ success: false, error: 'Job not found' });
     if (job.paymentStatus !== 'paid') return res.status(400).json({ success: false, error: 'Payment not confirmed yet' });
+    if (job.otpUsed) return res.status(400).json({ success: false, error: 'OTP already used' });
 
-    // Generate fresh OTP each time this is called (replaces old one)
+    // Return cached OTP if exists and not expired
+    if (otpCache.has(req.params.id)) {
+      const cached = otpCache.get(req.params.id)
+      if (cached.expiresAt > Date.now()) {
+        logger.info(`OTP served from cache for job ${req.params.id}: ${cached.otp}`)
+        return res.json({ success: true, otp: cached.otp })
+      }
+    }
+
+    // Generate new OTP only once
     const otp = generateOTP();
     const otpHash = await hashOTP(otp);
+    const otpExpiresAt = getOTPExpiry();
+
     await prisma.job.update({
       where: { id: req.params.id },
-      data: { otpHash, otpExpiresAt: getOTPExpiry(), otpUsed: false },
+      data: { otpHash, otpExpiresAt, otpUsed: false },
     });
 
-    logger.info(`OTP fetched for job ${req.params.id}: ${otp}`);
+    // Cache it
+    otpCache.set(req.params.id, { otp, expiresAt: otpExpiresAt.getTime() })
+
+    logger.info(`OTP generated for job ${req.params.id}: ${otp}`);
     return res.json({ success: true, otp });
   } catch (err) {
     logger.error(`OTP fetch error: ${err.message}`);
