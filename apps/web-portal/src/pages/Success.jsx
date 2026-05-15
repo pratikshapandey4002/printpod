@@ -9,41 +9,46 @@ export default function Success() {
   const navigate = useNavigate()
   const [searchParams] = useSearchParams()
   const [copied, setCopied] = useState(false)
-  const [otp, setOtp] = useState(state?.otp || null)
-  const [loading, setLoading] = useState(false)
+  const [otp, setOtp] = useState(null)
+  const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
 
   const jobId = state?.jobId || searchParams.get('jobId')
-  const totalAmount = state?.totalAmount
-  const fileName = state?.fileName
 
   useEffect(() => {
     if (!jobId) { navigate('/'); return }
-    // If coming from Dodo redirect (no otp in state), fetch it
-    if (!state?.otp) {
-      setLoading(true)
-      const fetchOtp = async () => {
-        try {
-          const { data } = await axios.get(`${API}/jobs/${jobId}/otp`)
-          if (data.success) setOtp(data.otp)
-          else setError(data.error)
-        } catch (err) {
-          setError('Could not load OTP. Try again.')
-        } finally {
-          setLoading(false)
-        }
-      }
-      // Poll until payment is confirmed
+
+    const fetchOtp = async () => {
+      let attempts = 0
+      const maxAttempts = 15
       const tryFetch = async () => {
         try {
           const { data } = await axios.get(`${API}/jobs/${jobId}/otp`)
-          if (data.success) { setOtp(data.otp); setLoading(false) }
-          else setTimeout(tryFetch, 2000)
-        } catch { setTimeout(tryFetch, 2000) }
+          if (data.success) {
+            setOtp(data.otp)
+            setLoading(false)
+          } else if (attempts < maxAttempts) {
+            attempts++
+            setTimeout(tryFetch, 2000)
+          } else {
+            setError('Payment not confirmed yet. Try refreshing.')
+            setLoading(false)
+          }
+        } catch {
+          if (attempts < maxAttempts) {
+            attempts++
+            setTimeout(tryFetch, 2000)
+          } else {
+            setError('Could not load OTP. Refresh this page.')
+            setLoading(false)
+          }
+        }
       }
       tryFetch()
     }
-  }, [jobId, navigate, state])
+
+    fetchOtp()
+  }, [jobId, navigate])
 
   if (!jobId) return null
 
@@ -70,22 +75,37 @@ export default function Success() {
       <div className="card" style={{ textAlign:'center' }}>
         <div style={{ fontSize:48, marginBottom:12 }}>✅</div>
         <div style={{ fontWeight:700, fontSize:20, marginBottom:6 }}>Payment Successful!</div>
-        {fileName && <div style={{ color:'#6b7280', fontSize:14 }}>{fileName}</div>}
-        {totalAmount && <div style={{ color:'#6b7280', fontSize:14 }}>₹{totalAmount}</div>}
+        <div style={{ color:'#6b7280', fontSize:14 }}>Your document is ready to print</div>
       </div>
 
       <div className="card" style={{ textAlign:'center' }}>
         <div style={{ fontSize:14, color:'#6b7280', marginBottom:8, fontWeight:500 }}>
           YOUR PRINT OTP
         </div>
+
         {loading ? (
           <div style={{ padding:'20px 0' }}>
-            <div className="spinner" style={{ borderColor:'rgba(37,99,235,0.3)', borderTopColor:'#2563eb', width:32, height:32, margin:'0 auto' }} />
-            <div style={{ color:'#6b7280', fontSize:14, marginTop:12 }}>Confirming payment...</div>
+            <div style={{
+              width:36, height:36, border:'3px solid #e5e7eb',
+              borderTopColor:'#2563eb', borderRadius:'50%',
+              animation:'spin 0.7s linear infinite', margin:'0 auto'
+            }} />
+            <div style={{ color:'#6b7280', fontSize:14, marginTop:12 }}>
+              Confirming payment...
+            </div>
           </div>
         ) : error ? (
-          <div className="error">{error}</div>
-        ) : otp ? (
+          <div>
+            <div className="error">{error}</div>
+            <button
+              className="btn btn-outline"
+              onClick={() => window.location.reload()}
+              style={{ marginTop:8 }}
+            >
+              Refresh
+            </button>
+          </div>
+        ) : (
           <>
             <div style={{
               fontSize:52, fontWeight:800, letterSpacing:12,
@@ -105,7 +125,7 @@ export default function Success() {
               Expires in 15 minutes
             </div>
           </>
-        ) : null}
+        )}
       </div>
 
       <div className="card">
